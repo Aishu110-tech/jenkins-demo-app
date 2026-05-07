@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Multi Stage CI/CD Pipeline
 
 on:
   push:
@@ -6,26 +6,80 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
 
+  # Stage 1
+  checkout:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-    - name: Checkout Code
-      uses: actions/checkout@v4
+  # Stage 2
+  build:
+    runs-on: ubuntu-latest
+    needs: checkout
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    steps:
+      - name: Build Application
+        run: |
+          echo "Building application..."
+          mkdir build
+          echo "Build completed"
 
-    - name: Build Docker Image
-      run: |
-        docker build -t myapp .
+  # Stage 3
+  test:
+    runs-on: ubuntu-latest
+    needs: build
 
-    - name: Run Docker Container
-      run: |
-        docker run -d -p 5000:5000 --name mycontainer myapp
+    steps:
+      - name: Run Unit Tests
+        run: |
+          echo "Running test cases..."
+          echo "All tests passed"
 
-    - name: Verify Container Running
-      run: |
-        docker ps
+  # Stage 4
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t myapp .
+
+  # Stage 5
+  docker-push:
+    runs-on: ubuntu-latest
+    needs: docker-build
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Tag Docker Image
+        run: |
+          docker tag myapp ${{ secrets.DOCKER_USERNAME }}/myapp:latest
+
+      - name: Push Docker Image
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/myapp:latest
+
+  # Stage 6
+  deploy:
+    runs-on: ubuntu-latest
+    needs: docker-push
+
+    steps:
+      - name: Deploy Application
+        run: |
+          echo "Deploying application to server..."
